@@ -58,8 +58,10 @@
 (define-handler :plugin
   :opt
   {:fn (lambda [{:opt ?opts} plugin]
-         (case (. (require plugin) :setup)
-           setup (setup (or ?opts {}))))})
+         (when (not= ?opts false)
+           (case (. (require plugin) :setup)
+             nil nil
+             setup (setup (or ?opts {})))))})
 
 (define-handler :plugin :keymap {:fn keymap-handler})
 

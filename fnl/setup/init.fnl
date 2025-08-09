@@ -1,3 +1,21 @@
+(lambda ensure-plugin [plugin ?config]
+  (let [config (or ?config {})
+        module (.. :setup.registry. plugin)
+        spec (case (pcall require module)
+               (true s) s
+               rest (let [parts (vim.split plugin "."
+                                           {:plain true :trimempty true})]
+                      (case (length parts)
+                        1 (error (.. "module not in registry: " plugin))
+                        l (-> [(unpack parts 1 (- l 1))]
+                              vim.iter
+                              (: :join ".")
+                              ensure-plugin))))]
+    (each [_ dep (ipairs (or spec.dependencies []))]
+      (ensure-plugin dep))
+    (vim.pack.add [(. spec :pack)])
+    spec))
+
 (local handlers {})
 
 (lambda define-handler-group [name]
@@ -19,11 +37,14 @@
 ;;;; reusable handlers
 
 (lambda keymap-handler [{:keymap ?config}]
-  (when ?config
-    (each [key val (pairs ?config)]
-      (case val
-        {: cmd : mode} (vim.keymap.set mode key cmd)
-        cmd (vim.keymap.set :n key cmd)))))
+  (let [config (case (type ?config)
+                 :function (?config)
+                 _ ?config)]
+    (when config
+      (each [key val (pairs config)]
+        (case val
+          {: cmd : mode} (vim.keymap.set mode key cmd)
+          cmd (vim.keymap.set :n key cmd))))))
 
 ;;;; group
 
@@ -34,6 +55,7 @@
   {:fn (lambda [{:colorscheme ?config}]
          (case ?config
            (where str (= (type str) :string)) (do
+                                                (ensure-plugin str)
                                                 ((. (require str) :setup) {})
                                                 (vim.cmd.colorscheme str))))})
 
@@ -54,6 +76,10 @@
 ;;;; group
 
 (define-handler-group :plugin)
+
+(define-handler :plugin
+  :ensure
+  {:fn (lambda [?config plugin] (ensure-plugin plugin ?config))})
 
 (define-handler :plugin
   :opt
@@ -78,8 +104,8 @@
              (each [key val (pairs (or ?config {}))]
                (vim.api.nvim_create_autocmd :FileType
                                             {:pattern ft
-                                             :callback #((. (require key)
-                                                            :setup) val)
+                                             :callback #(call-handlers :plugin
+                                                                       val key)
                                              : group})))))})
 
 (define-handler :filetype

@@ -9,11 +9,11 @@
 (lambda define-handler [group handler-name config]
   (ensure-handler-group group)
   (assert (. config :fn) (.. "no handler function: " handler-name))
-  (set (. handlers group handler-name) config))
+  (table.insert (. handlers group) [handler-name config]))
 
 (lambda call-handlers [group-name & rest]
   (ensure-handler-group group-name)
-  (each [key handler (pairs (. handlers group-name))]
+  (each [_ [_ handler] (ipairs (. handlers group-name))]
     (handler.fn (unpack rest))))
 
 ;;;; reusable handlers

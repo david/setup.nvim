@@ -16,27 +16,27 @@
     (vim.pack.add [(. spec :pack)])
     spec))
 
-(local handlers {})
+(local traits {})
 
-(lambda define-handler-group [name]
-  (set (. handlers name) {}))
+(lambda define-trait-component [name]
+  (set (. traits name) {}))
 
-(lambda ensure-handler-group [name]
-  (assert (. handlers name) (.. "no handler group: " name)))
+(lambda ensure-trait-component [name]
+  (assert (. traits name) (.. "no trait component: " name)))
 
-(lambda define-handler [group handler-name config]
-  (ensure-handler-group group)
-  (assert (. config :fn) (.. "no handler function: " handler-name))
-  (table.insert (. handlers group) [handler-name config]))
+(lambda define-trait [component trait-name config]
+  (ensure-trait-component component)
+  (assert (. config :fn) (.. "no trait function: " trait-name))
+  (table.insert (. traits component) [trait-name config]))
 
-(lambda call-handlers [group-name & rest]
-  (ensure-handler-group group-name)
-  (each [_ [_ handler] (ipairs (. handlers group-name))]
-    (handler.fn (unpack rest))))
+(lambda call-traits [component-name & rest]
+  (ensure-trait-component component-name)
+  (each [_ [_ trait] (ipairs (. traits component-name))]
+    (trait.fn (unpack rest))))
 
-;;;; reusable handlers
+;;;; reusable traits
 
-(lambda keymap-handler [{:keymap ?config}]
+(lambda keymap-trait [{:keymap ?config}]
   (let [config (case (type ?config)
                  :function (?config)
                  _ ?config)]
@@ -46,11 +46,11 @@
           {: cmd : mode} (vim.keymap.set mode key cmd)
           cmd (vim.keymap.set :n key cmd))))))
 
-;;;; group
+;;;; component
 
-(define-handler-group :nvim)
+(define-trait-component :nvim)
 
-(define-handler :nvim
+(define-trait :nvim
   :colorscheme
   {:fn (lambda [{:colorscheme ?config}]
          (case ?config
@@ -59,29 +59,29 @@
                                                 ((. (require str) :setup) {})
                                                 (vim.cmd.colorscheme str))))})
 
-(define-handler :nvim
+(define-trait :nvim
   :g
   {:fn (lambda [{:g ?config}]
          (each [key val (pairs ?config)]
            (set (. vim.g key) val)))})
 
-(define-handler :nvim
+(define-trait :nvim
   :opt
   {:fn (lambda [{:opt ?config}]
          (each [key val (pairs ?config)]
            (set (. vim.opt key) val)))})
 
-(define-handler :nvim :keymap {:fn keymap-handler})
+(define-trait :nvim :keymap {:fn keymap-trait})
 
-;;;; group
+;;;; component
 
-(define-handler-group :plugin)
+(define-trait-component :plugin)
 
-(define-handler :plugin
+(define-trait :plugin
   :ensure
   {:fn (lambda [?config plugin] (ensure-plugin plugin ?config))})
 
-(define-handler :plugin
+(define-trait :plugin
   :opt
   {:fn (lambda [{:opt ?opts} plugin]
          (when (not= ?opts false)
@@ -89,13 +89,13 @@
              nil nil
              setup (setup (or ?opts {})))))})
 
-(define-handler :plugin :keymap {:fn keymap-handler})
+(define-trait :plugin :keymap {:fn keymap-trait})
 
-;;;; group
+;;;; component
 
-(define-handler-group :filetype)
+(define-trait-component :filetype)
 
-(define-handler :filetype
+(define-trait :filetype
   :plugin
   {:fn (lambda [{:plugin ?config} ft]
          (when ?config
@@ -104,11 +104,11 @@
              (each [key val (pairs (or ?config {}))]
                (vim.api.nvim_create_autocmd :FileType
                                             {:pattern ft
-                                             :callback #(call-handlers :plugin
-                                                                       val key)
+                                             :callback #(call-traits :plugin
+                                                                     val key)
                                              : group})))))})
 
-(define-handler :filetype
+(define-trait :filetype
   :lang
   {:fn (lambda [_config ft]
          (when (not= ft "*")
@@ -119,7 +119,7 @@
                                            :callback #(vim.treesitter.start)
                                            : group}))))})
 
-(define-handler :filetype
+(define-trait :filetype
   :conform
   {:fn (lambda [{:conform ?config} ft]
          (when ?config
@@ -131,9 +131,9 @@
 (lambda setup [name ?config]
   (let [config (or ?config {})]
     (case name
-      :nvim (call-handlers :nvim config)
-      [:filetype ft] (call-handlers :filetype config ft)
-      _ (call-handlers :plugin config name))))
+      :nvim (call-traits :nvim config)
+      [:filetype ft] (call-traits :filetype config ft)
+      _ (call-traits :plugin config name))))
 
 ;; exports
 
